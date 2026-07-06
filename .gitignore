@@ -1,0 +1,10 @@
+# Go build outputs
+*.exe
+*.exe~
+
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
