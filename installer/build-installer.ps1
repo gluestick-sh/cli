@@ -69,6 +69,42 @@ function Test-FileSha256 {
     }
 }
 
+function Invoke-DownloadWithRetry {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Uri,
+
+        [string]$OutFile = '',
+        [int]$MaxAttempts = 3,
+        [int]$TimeoutSec = 600
+    )
+
+    $attempt = 0
+    while ($true) {
+        $attempt++
+        try {
+            if ($OutFile) {
+                Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UseBasicParsing -TimeoutSec $TimeoutSec
+                if (-not (Test-Path -LiteralPath $OutFile) -or (Get-Item -LiteralPath $OutFile).Length -eq 0) {
+                    throw 'download produced empty file'
+                }
+                return
+            }
+
+            $response = Invoke-WebRequest -Uri $Uri -UseBasicParsing -TimeoutSec $TimeoutSec
+            return $response.Content
+        } catch {
+            if ($attempt -ge $MaxAttempts) { throw }
+            $delay = [Math]::Min(30, 5 * $attempt)
+            Write-Warning "Download failed (attempt $attempt/$MaxAttempts): $Uri -- $_"
+            Start-Sleep -Seconds $delay
+            if ($OutFile) {
+                Remove-Item -LiteralPath $OutFile -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+}
+
 function Prepare-Payload {
     param(
         [string]$TargetArch,
@@ -80,7 +116,7 @@ function Prepare-Payload {
     $outputDir = Join-Path $installerDir "payload\$TargetArch"
     $manifestUrl = "$DepsRoot/deps/manifest.json"
     Write-Host "Fetching manifest: $manifestUrl"
-    $manifest = (Invoke-WebRequest -Uri $manifestUrl -UseBasicParsing).Content | ConvertFrom-Json
+    $manifest = Invoke-DownloadWithRetry -Uri $manifestUrl | ConvertFrom-Json
     $archManifest = $manifest.architectures.$TargetArch
     if (-not $archManifest) {
         throw "No dependency manifest for architecture: $TargetArch"
@@ -109,7 +145,7 @@ function Prepare-Payload {
             $sourceUrl = "$DepsRoot/deps/$TargetArch/$($asset.file)"
 
             Write-Host "  download $sourceUrl"
-            Invoke-WebRequest -Uri $sourceUrl -OutFile $tempFile -UseBasicParsing
+            Invoke-DownloadWithRetry -Uri $sourceUrl -OutFile $tempFile
             Test-FileSha256 -Path $tempFile -Expected $asset.sha256
 
             if ($asset.extract) {
@@ -140,7 +176,10 @@ function Ensure-GlueExe {
         [string]$Ver,
         [switch]$SkipBuild
     )
-    if ($Path -and (Test-Path -LiteralPath $Path)) {
+    if ($Path) {
+        if (-not (Test-Path -LiteralPath $Path)) {
+            throw "Glue binary not found: $Path"
+        }
         return (Resolve-Path -LiteralPath $Path).Path
     }
 
@@ -190,7 +229,7 @@ function Ensure-ShimExe {
     }
     Write-Host "Downloading shim.exe ($TargetArch)..." -ForegroundColor Cyan
     Write-Host "  $url" -ForegroundColor DarkGray
-    Invoke-WebRequest -Uri $url -OutFile $default -UseBasicParsing
+    Invoke-DownloadWithRetry -Uri $url -OutFile $default
     return (Resolve-Path -LiteralPath $default).Path
 }
 
@@ -221,7 +260,10 @@ function Build-InstallerForArch {
     Write-Host "Compiling $setupName (version $Ver)..." -ForegroundColor Cyan
     Push-Location $installerDir
     try {
-        & $Makensis "/DPAYLOAD_VERSION=$Ver" "/DPAYLOAD_ARCH=$TargetArch" "Glue.nsi"
+        & $Makensis "/DPAYLOAD_VERSION=$Ver" "/DPAYLOAD_ARCH=$TargetArch" "Glue.nsi" | Out-Host
+        if ($LASTEXITCODE -ne 0) {
+            throw "makensis failed with exit code $LASTEXITCODE"
+        }
     } finally {
         Pop-Location
     }
@@ -237,7 +279,7 @@ function Build-InstallerForArch {
     }
 
     Write-Host "Built: $setupPath" -ForegroundColor Green
-    return $setupPath
+    return ,$setupPath
 }
 
 if (-not $Version) {

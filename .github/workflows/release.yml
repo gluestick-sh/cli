@@ -70,6 +70,7 @@ jobs:
     runs-on: windows-latest
     needs: build
     strategy:
+      fail-fast: false
       matrix:
         goarch: [amd64, arm64]
     steps:
@@ -80,16 +81,36 @@ jobs:
           name: glue-windows-${{ matrix.goarch }}
           path: dist
 
+      - name: Install NSIS
+        run: choco install nsis -y --no-progress
+
+      - name: Verify glue artifact
+        shell: pwsh
+        run: |
+          $glue = "dist\glue-windows-${{ matrix.goarch }}.exe"
+          if (-not (Test-Path -LiteralPath $glue)) {
+            throw "missing glue artifact: $glue"
+          }
+
       - name: Build NSIS installer
         shell: pwsh
         working-directory: installer
         env:
           VERSION: ${{ github.ref_name }}
         run: |
-          choco install nsis -y --no-progress
           $version = $env:VERSION -replace '^v', ''
-          .\build-installer.ps1 -Arch "${{ matrix.goarch }}" -Version $version -SkipBuildGlue `
-            -GlueExe "..\dist\glue-windows-${{ matrix.goarch }}.exe"
+          $glue = "..\dist\glue-windows-${{ matrix.goarch }}.exe"
+          $maxAttempts = 3
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            try {
+              .\build-installer.ps1 -Arch "${{ matrix.goarch }}" -Version $version -SkipBuildGlue -GlueExe $glue
+              break
+            } catch {
+              if ($attempt -eq $maxAttempts) { throw }
+              Write-Warning "Installer build failed (attempt $attempt/$maxAttempts): $_"
+              Start-Sleep -Seconds 15
+            }
+          }
 
       - uses: actions/upload-artifact@v4
         with:
