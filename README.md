@@ -11,7 +11,7 @@
 ### One-click (recommended)
 
 ```powershell
-irm https://gluestick.sh/install/install.ps1 | iex
+irm https://gluestick.sh/scripts/install.ps1 | iex
 ```
 
 ### From source

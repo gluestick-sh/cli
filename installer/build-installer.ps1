@@ -17,7 +17,7 @@ param(
     [string]$GlueExe = '',
     [string]$ShimExe = '',
     [string]$ShimReleaseUrl = '',
-    [string]$DepsBase = $(if ($env:GLUE_DEPS_BASE) { $env:GLUE_DEPS_BASE.TrimEnd('/') } else { 'https://gluestick.sh/install' }),
+    [string]$DepsBase = $(if ($env:GLUE_DEPS_BASE) { $env:GLUE_DEPS_BASE.TrimEnd('/') } else { 'https://gluestick.sh/scripts' }),
     [switch]$SkipBuildGlue,
     [switch]$SkipSha256
 )
