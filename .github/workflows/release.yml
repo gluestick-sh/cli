@@ -76,14 +76,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/checkout@v4
-        with:
-          repository: gluestick-sh/web
-          path: web-deps
-          sparse-checkout: |
-            scripts/deps
-          sparse-checkout-cone-mode: true
-
       - uses: actions/download-artifact@v4
         with:
           name: glue-windows-${{ matrix.goarch }}
@@ -105,7 +97,6 @@ jobs:
         working-directory: installer
         env:
           VERSION: ${{ github.ref_name }}
-          GLUE_DEPS_BASE: ${{ github.workspace }}/web-deps/scripts
         run: |
           $version = $env:VERSION -replace '^v', ''
           $glue = "..\dist\glue-windows-${{ matrix.goarch }}.exe"
