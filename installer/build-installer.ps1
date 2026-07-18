@@ -27,6 +27,9 @@ $ErrorActionPreference = 'Stop'
 
 $installerDir = $PSScriptRoot
 $repoRoot = Split-Path $installerDir -Parent
+$Script:DownloadHeaders = @{
+    'User-Agent' = 'Glue-Installer/1.0 (Windows; gluestick.sh)'
+}
 
 function Get-DefaultVersion {
     $versionGo = Join-Path $repoRoot 'version\version.go'
@@ -69,6 +72,78 @@ function Test-FileSha256 {
     }
 }
 
+function Test-LooksLikeHtml {
+    param([string]$Text)
+    if (-not $Text) { return $false }
+    $trim = $Text.TrimStart()
+    return $trim.StartsWith('<') -or $trim.StartsWith('<!')
+}
+
+function Resolve-DepsContext {
+    param([string]$Base)
+
+    $localCandidates = @()
+    if ($Base -and $Base -notmatch '^https?://') {
+        $localCandidates += Join-Path $Base 'deps'
+    }
+    $localCandidates += Join-Path $installerDir 'deps'
+
+    foreach ($root in $localCandidates) {
+        $manifestPath = Join-Path $root 'manifest.json'
+        if (Test-Path -LiteralPath $manifestPath) {
+            return @{
+                Mode       = 'local'
+                LocalRoot  = (Resolve-Path -LiteralPath $root).Path
+                RemoteBase = 'https://gluestick.sh/scripts'
+            }
+        }
+    }
+
+    $remoteBase = if ($Base) { $Base.TrimEnd('/') } else { 'https://gluestick.sh/scripts' }
+    return @{
+        Mode       = 'remote'
+        LocalRoot  = ''
+        RemoteBase = $remoteBase
+    }
+}
+
+function Get-DepsManifest {
+    param($DepsContext)
+
+    if ($DepsContext.Mode -eq 'local') {
+        $manifestPath = Join-Path $DepsContext.LocalRoot 'manifest.json'
+        Write-Host "Using local manifest: $manifestPath"
+        return Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    }
+
+    $manifestUrl = "$($DepsContext.RemoteBase)/deps/manifest.json"
+    Write-Host "Fetching manifest: $manifestUrl"
+    return Invoke-DownloadWithRetry -Uri $manifestUrl | ConvertFrom-Json
+}
+
+function Copy-DepsAsset {
+    param(
+        $DepsContext,
+        [string]$TargetArch,
+        [string]$FileName,
+        [string]$OutFile
+    )
+
+    if ($DepsContext.Mode -eq 'local') {
+        $source = Join-Path (Join-Path $DepsContext.LocalRoot $TargetArch) $FileName
+        if (-not (Test-Path -LiteralPath $source)) {
+            throw "Local deps asset not found: $source"
+        }
+        Write-Host "  copy $source"
+        Copy-Item -LiteralPath $source -Destination $OutFile -Force
+        return
+    }
+
+    $sourceUrl = "$($DepsContext.RemoteBase)/deps/$TargetArch/$FileName"
+    Write-Host "  download $sourceUrl"
+    Invoke-DownloadWithRetry -Uri $sourceUrl -OutFile $OutFile
+}
+
 function Invoke-DownloadWithRetry {
     param(
         [Parameter(Mandatory)]
@@ -84,14 +159,24 @@ function Invoke-DownloadWithRetry {
         $attempt++
         try {
             if ($OutFile) {
-                Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UseBasicParsing -TimeoutSec $TimeoutSec
+                Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UseBasicParsing -TimeoutSec $TimeoutSec -Headers $Script:DownloadHeaders
                 if (-not (Test-Path -LiteralPath $OutFile) -or (Get-Item -LiteralPath $OutFile).Length -eq 0) {
                     throw 'download produced empty file'
+                }
+                $preview = Get-Content -LiteralPath $OutFile -TotalCount 1 -ErrorAction SilentlyContinue
+                if (Test-LooksLikeHtml $preview) {
+                    throw 'server returned HTML instead of file content'
                 }
                 return
             }
 
-            $response = Invoke-WebRequest -Uri $Uri -UseBasicParsing -TimeoutSec $TimeoutSec
+            $response = Invoke-WebRequest -Uri $Uri -UseBasicParsing -TimeoutSec $TimeoutSec -Headers $Script:DownloadHeaders
+            if ($response.StatusCode -ge 400) {
+                throw "HTTP $($response.StatusCode)"
+            }
+            if (Test-LooksLikeHtml $response.Content) {
+                throw 'server returned HTML instead of expected text'
+            }
             return $response.Content
         } catch {
             if ($attempt -ge $MaxAttempts) { throw }
@@ -113,10 +198,9 @@ function Prepare-Payload {
         [string]$DepsRoot
     )
 
+    $depsContext = Resolve-DepsContext -Base $DepsRoot
     $outputDir = Join-Path $installerDir "payload\$TargetArch"
-    $manifestUrl = "$DepsRoot/deps/manifest.json"
-    Write-Host "Fetching manifest: $manifestUrl"
-    $manifest = Invoke-DownloadWithRetry -Uri $manifestUrl | ConvertFrom-Json
+    $manifest = Get-DepsManifest -DepsContext $depsContext
     $archManifest = $manifest.architectures.$TargetArch
     if (-not $archManifest) {
         throw "No dependency manifest for architecture: $TargetArch"
@@ -142,10 +226,8 @@ function Prepare-Payload {
         foreach ($asset in $archManifest.files) {
             $destPath = Join-Path $outputDir ($asset.dest -replace '/', '\')
             $tempFile = Join-Path $tempDir $asset.file
-            $sourceUrl = "$DepsRoot/deps/$TargetArch/$($asset.file)"
 
-            Write-Host "  download $sourceUrl"
-            Invoke-DownloadWithRetry -Uri $sourceUrl -OutFile $tempFile
+            Copy-DepsAsset -DepsContext $depsContext -TargetArch $TargetArch -FileName $asset.file -OutFile $tempFile
             Test-FileSha256 -Path $tempFile -Expected $asset.sha256
 
             if ($asset.extract) {
