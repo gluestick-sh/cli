@@ -13,7 +13,7 @@ import (
 // When not injected (e.g. a plain `go build`), Commit and Date fall back to the
 // VCS metadata that Go embeds automatically via runtime/debug.ReadBuildInfo.
 var (
-	Version = "0.1.0"
+	Version = "0.1.6"
 	Commit  = ""
 	Date    = ""
 )
