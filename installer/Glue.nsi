@@ -52,7 +52,8 @@ Function .onInit
   ${EndIf}
 
   StrCmp "${PAYLOAD_ARCH}" "arm64" 0 archOk
-    nsExec::ExecToStack 'powershell.exe -NoProfile -Command "if ($env:PROCESSOR_ARCHITECTURE -match ''ARM64'' -or $env:PROCESSOR_ARCHITEW6432 -match ''ARM64'') { exit 0 } else { exit 1 }"'
+    ; $$ so NSIS does not eat PowerShell $env:... (warning 6000 otherwise)
+    nsExec::ExecToStack 'powershell.exe -NoProfile -Command "if ($$env:PROCESSOR_ARCHITECTURE -match ''ARM64'' -or $$env:PROCESSOR_ARCHITEW6432 -match ''ARM64'') { exit 0 } else { exit 1 }"'
     Pop $0
     Pop $1
     IntCmp $0 0 archOk arm64Bad arm64Bad
