@@ -17,7 +17,7 @@ param(
     [string]$GlueExe = '',
     [string]$ShimExe = '',
     [string]$ShimReleaseUrl = '',
-    [string]$DepsBase = $(if ($env:GLUE_DEPS_BASE) { $env:GLUE_DEPS_BASE.TrimEnd('/') } else { 'https://gluestick.sh' }),
+    [string]$DepsBase = $(if ($env:GLUE_DEPS_BASE) { $env:GLUE_DEPS_BASE.TrimEnd('/') } else { 'https://gluestick.sh/scripts' }),
     [switch]$SkipBuildGlue,
     [switch]$SkipSha256
 )
@@ -94,12 +94,12 @@ function Resolve-DepsContext {
             return @{
                 Mode       = 'local'
                 LocalRoot  = (Resolve-Path -LiteralPath $root).Path
-                RemoteBase = 'https://gluestick.sh'
+                RemoteBase = 'https://gluestick.sh/scripts'
             }
         }
     }
 
-    $remoteBase = if ($Base) { $Base.TrimEnd('/') } else { 'https://gluestick.sh' }
+    $remoteBase = if ($Base) { $Base.TrimEnd('/') } else { 'https://gluestick.sh/scripts' }
     return @{
         Mode       = 'remote'
         LocalRoot  = ''
