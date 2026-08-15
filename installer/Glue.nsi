@@ -1,5 +1,5 @@
 ; Glue Windows installer (NSIS)
-;   makensis /DPAYLOAD_VERSION=0.1.1 /DPAYLOAD_ARCH=amd64 Glue.nsi
+;   makensis /DPAYLOAD_VERSION=0.1.10 /DPAYLOAD_ARCH=amd64 Glue.nsi
 
 !include "MUI2.nsh"
 !include "LogicLib.nsh"

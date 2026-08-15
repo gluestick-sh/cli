@@ -5,9 +5,9 @@
 
 .EXAMPLE
   .\build-installer.ps1
-  .\build-installer.ps1 -Version 0.1.1
+  .\build-installer.ps1 -Version 0.1.10
   .\build-installer.ps1 -Arch arm64
-  .\build-installer.ps1 -Arch amd64,arm64 -Version 0.1.1
+  .\build-installer.ps1 -Arch amd64,arm64 -Version 0.1.10
 #>
 param(
     [ValidateSet('amd64', 'arm64')]
