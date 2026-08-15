@@ -31,3 +31,19 @@ func TestSelectUpdateTargets_listOnly(t *testing.T) {
 		t.Fatalf("expected nil targets for list-only mode, got %v", got)
 	}
 }
+
+func TestUpdateInstallRef(t *testing.T) {
+	tests := []struct {
+		u    engine.PackageUpdate
+		want string
+	}{
+		{engine.PackageUpdate{Name: "git", Bucket: "main"}, "git"},
+		{engine.PackageUpdate{Name: "git", Bucket: ""}, "git"},
+		{engine.PackageUpdate{Name: "obs-studio", Bucket: "extras"}, "extras/obs-studio"},
+	}
+	for _, tt := range tests {
+		if got := updateInstallRef(tt.u); got != tt.want {
+			t.Fatalf("updateInstallRef(%+v) = %q, want %q", tt.u, got, tt.want)
+		}
+	}
+}

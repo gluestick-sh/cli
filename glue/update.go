@@ -66,23 +66,24 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	var failed []string
 	var items []jsonResultItem
 	for _, u := range targets {
+		ref := updateInstallRef(u)
 		if !jsonOutputEnabled() {
-			verbose.Progressf("Updating %s (%s -> %s)...\n", u.Name, u.InstalledVersion, u.LatestVersion)
+			verbose.Progressf("Updating %s (%s -> %s)...\n", ref, u.InstalledVersion, u.LatestVersion)
 		}
-		req := &engine.InstallRequest{Request: engine.Request{Name: u.Name, Force: true}}
+		req := &engine.InstallRequest{Request: engine.Request{Name: ref, Force: true}}
 		result, err := eng.Install(cmd.Context(), req, reporter)
 		if err != nil {
 			if !jsonOutputEnabled() {
 				fmt.Printf("  %s Failed: %v\n", markFail, err)
 			}
-			failed = append(failed, u.Name)
-			items = append(items, jsonResultItemFromInstall(u.Name, result, err))
+			failed = append(failed, ref)
+			items = append(items, jsonResultItemFromInstall(ref, result, err))
 			continue
 		}
 		if !jsonOutputEnabled() {
-			fmt.Printf("  %s %s updated to %s\n", markSuccess, u.Name, u.LatestVersion)
+			fmt.Printf("  %s %s updated to %s\n", markSuccess, ref, u.LatestVersion)
 		}
-		items = append(items, jsonResultItemFromInstall(u.Name, result, nil))
+		items = append(items, jsonResultItemFromInstall(ref, result, nil))
 	}
 	if jsonOutputEnabled() {
 		if err := jsonOperationResult("update", items); err != nil {
@@ -101,14 +102,17 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func updateInstallRef(u engine.PackageUpdate) string {
+	if u.Bucket != "" && u.Bucket != "main" {
+		return u.Bucket + "/" + u.Name
+	}
+	return u.Name
+}
+
 func printAvailableUpdates(updates []engine.PackageUpdate) {
 	fmt.Printf("%s%d package(s) have updates:%s\n\n", colorBlue, len(updates), colorReset)
 	for _, u := range updates {
-		ref := u.Name
-		if u.Bucket != "" && u.Bucket != "main" {
-			ref = u.Bucket + "/" + u.Name
-		}
-		fmt.Printf("  %s: %s -> %s\n", ref, u.InstalledVersion, u.LatestVersion)
+		fmt.Printf("  %s: %s -> %s\n", updateInstallRef(u), u.InstalledVersion, u.LatestVersion)
 	}
 	fmt.Println("\nRun 'glue update --all' or 'glue update <package>' to upgrade.")
 }
