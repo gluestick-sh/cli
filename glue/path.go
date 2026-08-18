@@ -42,23 +42,28 @@ var pathCheckCmd = &cobra.Command{
 			return fmt.Errorf("initialize shim manager: %w", err)
 		}
 
-		if shimMgr.InPath() {
-			fmt.Println(markSuccess + " Glue is in PATH")
-			return nil
+		if !shimMgr.InPath() {
+			fmt.Println(markFail + " Glue is NOT in PATH")
+			fmt.Println("\nAdd the following to your PATH:")
+			fmt.Println(shimMgr.BinDir())
+			fmt.Println("\nOr run: glue path setup")
+			return reportedFail()
 		}
 
-		fmt.Println(markFail + " Glue is NOT in PATH")
-		fmt.Println("\nAdd the following to your PATH:")
-		fmt.Println(shimMgr.BinDir())
-		fmt.Println("\nOr run from PowerShell (requires admin):")
-		fmt.Printf("[Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path', 'User') + ';%s', 'User')\n", shimMgr.BinDir())
-		return reportedFail()
+		fmt.Println(markSuccess + " Glue is in PATH")
+		apps := windowsAppsDir()
+		if apps != "" && pathDirPrecedes(os.Getenv("PATH"), apps, shimMgr.BinDir()) {
+			fmt.Println(markFail + " Microsoft Store python aliases may shadow Glue shims")
+			fmt.Println("    → Run: glue path setup")
+			return reportedFail()
+		}
+		return nil
 	},
 }
 
 var pathSetupCmd = &cobra.Command{
 	Use:   "setup",
-	Short: "Add glue to PATH (no admin required on Windows)",
+	Short: "Add glue shims to the front of PATH (no admin required on Windows)",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		root := glueRoot()
 
@@ -67,26 +72,22 @@ var pathSetupCmd = &cobra.Command{
 			return fmt.Errorf("initialize shim manager: %w", err)
 		}
 
-		if shimMgr.InPath() {
-			fmt.Println(markSuccess + " glue is already in PATH")
-			return nil
-		}
-
 		return addToUserPath(shimMgr.BinDir())
 	},
 }
 
-// addToUserPath adds a directory to the user PATH on Windows (registry User Environment).
+// addToUserPath puts dir first on the user PATH so Store aliases cannot shadow shims.
 func addToUserPath(dir string) error {
-	fmt.Printf("Adding %s to user PATH...\n", dir)
-	if err := appendToUserPath(dir); err != nil {
+	fmt.Printf("Putting %s first on user PATH...\n", dir)
+	changed, err := ensureUserPathFront(dir)
+	if err != nil {
 		return err
 	}
-	// Refresh current process PATH for this session.
-	if cur := os.Getenv("PATH"); cur != "" {
-		_ = os.Setenv("PATH", cur+";"+dir)
-	} else {
-		_ = os.Setenv("PATH", dir)
+	prependDirToProcessPath(dir)
+	disableWindowsPythonAliases()
+	if !changed {
+		fmt.Println(markSuccess + " glue shims already first on user PATH")
+		return nil
 	}
 	fmt.Println(markSuccess + " Added to user PATH")
 	fmt.Println("\n⚠ Restart your terminal for changes to take effect")

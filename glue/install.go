@@ -111,6 +111,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 			continue
 		}
 		items = append(items, jsonResultItemFromInstall(pkgRef, result, nil))
+		disableWindowsPythonAliases()
 	}
 
 	if jsonOutputEnabled() {

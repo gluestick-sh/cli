@@ -84,6 +84,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			fmt.Printf("  %s %s updated to %s\n", markSuccess, ref, u.LatestVersion)
 		}
 		items = append(items, jsonResultItemFromInstall(ref, result, nil))
+		disableWindowsPythonAliases()
 	}
 	if jsonOutputEnabled() {
 		if err := jsonOperationResult("update", items); err != nil {

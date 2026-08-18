@@ -19,13 +19,27 @@ function Add-DirToUserPath {
     $Dir = $Dir.TrimEnd('\')
     $current = [Environment]::GetEnvironmentVariable('Path', 'User')
     if (-not $current) { $current = '' }
+    $parts = @()
     foreach ($part in $current -split ';') {
-        if ($part.Trim().TrimEnd('\') -ieq $Dir) {
-            return
+        $trim = $part.Trim()
+        if (-not $trim) { continue }
+        if ($trim.TrimEnd('\') -ieq $Dir) { continue }
+        $parts += $trim
+    }
+    $newPath = if ($parts.Count -gt 0) { "$Dir;$($parts -join ';')" } else { $Dir }
+    [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
+}
+
+function Disable-PythonAppAliases {
+    $apps = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps'
+    foreach ($name in @('python.exe', 'python3.exe', 'pythonw.exe')) {
+        $p = Join-Path $apps $name
+        if (-not (Test-Path -LiteralPath $p)) { continue }
+        $item = Get-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue
+        if ($item -and -not $item.PSIsContainer -and $item.Length -le 1024) {
+            Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue
         }
     }
-    $newPath = if ($current.Trim()) { "$current;$Dir" } else { $Dir }
-    [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
 }
 
 function Install-MinGit {
@@ -81,6 +95,8 @@ Get-ChildItem -LiteralPath $GlueRoot -Recurse -Include *.exe, *.dll -File -Error
 
 Install-MinGit -Root $GlueRoot -CpuArch $Arch
 Add-DirToUserPath -Dir $GlueRoot
+Add-DirToUserPath -Dir (Join-Path $GlueRoot 'shims')
+Disable-PythonAppAliases
 
 & $glueExe path setup
 if ($LASTEXITCODE -ne 0) {
