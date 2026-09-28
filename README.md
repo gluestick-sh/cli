@@ -22,6 +22,7 @@ Requires **Go 1.26+**.
 git clone https://github.com/gluestick-sh/cli.git
 cd cli
 go build -o glue.exe ./glue
+.\glue.exe -v
 .\glue.exe path setup
 ```
 
@@ -61,7 +62,7 @@ Data directory: `%USERPROFILE%\.glue`
 
 | Command | Description |
 | --- | --- |
-| `glue install <pkg>` | Install packages (`bucket/pkg`, `@version`, `--force`) |
+| `glue install <pkg>` | Install packages (`bucket/pkg`, `@version`, `--force`, `--timings`) |
 | `glue uninstall <pkg>` | Uninstall packages |
 | `glue search <query>` | Search bucket manifests |
 | `glue list` | List installed packages |
@@ -169,4 +170,4 @@ go build -o glue.exe ./glue
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+[MIT](LICENSE)
