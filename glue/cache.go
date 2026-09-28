@@ -6,10 +6,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/gluestick-sh/core/engine"
 	"github.com/gluestick-sh/core/humanize"
 	"github.com/gluestick-sh/core/verbose"
+	"github.com/spf13/cobra"
+)
+
+const (
+	DONE = "Done.\n"
 )
 
 // cacheCmd manages the SQLite cache index and content-store blobs.
@@ -96,7 +100,7 @@ func runCacheGC(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cache gc: %w", err)
 	}
 
-	verbose.Progressf("Done.\n")
+	verbose.Progressf(DONE)
 	return nil
 }
 
@@ -117,7 +121,7 @@ var cacheRebuildCmd = &cobra.Command{
 		verbose.Progressf("  Source: %s\n", appsDir)
 		if _, err := os.Stat(appsDir); os.IsNotExist(err) {
 			verbose.Progressf("  Apps directory not found (nothing to index)\n")
-			verbose.Progressf("Done.\n")
+			verbose.Progressf(DONE)
 			return nil
 		}
 
@@ -133,7 +137,7 @@ var cacheRebuildCmd = &cobra.Command{
 		} else {
 			verbose.Progressf("  Indexed %d package(s)\n", count)
 		}
-		verbose.Progressf("Done.\n")
+		verbose.Progressf(DONE)
 		return nil
 	},
 }
